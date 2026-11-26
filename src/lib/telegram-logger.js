@@ -22,19 +22,63 @@ async function lookupGeo(ip) {
   ) {
     return null;
   }
+
   try {
-    const res = await fetch(
-      `http://ip-api.com/json/${encodeURIComponent(
-        clean
-      )}?fields=status,country,countryCode,regionName,city,district,zip,lat,lon,timezone,isp,org,as,mobile,proxy,hosting`,
-      { signal: AbortSignal.timeout(2500) }
-    );
-    if (!res.ok) return null;
-    const data = await res.json();
-    return data?.status === 'success' ? data : null;
+    const res = await fetch(`https://ipinfo.io/${encodeURIComponent(clean)}/json`, {
+      signal: AbortSignal.timeout(2500),
+    });
+    if (res.ok) {
+      const d = await res.json();
+      if (d && !d.bogon && (d.city || d.loc)) {
+        const [latStr, lonStr] = String(d.loc || '').split(',');
+        const lat = latStr ? Number(latStr) : undefined;
+        const lon = lonStr ? Number(lonStr) : undefined;
+        return {
+          country: d.country,
+          countryCode: d.country,
+          regionName: d.region,
+          city: d.city,
+          zip: d.postal,
+          lat: Number.isFinite(lat) ? lat : undefined,
+          lon: Number.isFinite(lon) ? lon : undefined,
+          timezone: d.timezone,
+          isp: d.org,
+          org: d.org,
+          as: d.org,
+        };
+      }
+    }
   } catch {
-    return null;
+    // fallback below
   }
+
+  try {
+    const res = await fetch(`https://ipwho.is/${encodeURIComponent(clean)}`, {
+      signal: AbortSignal.timeout(2500),
+    });
+    if (res.ok) {
+      const d = await res.json();
+      if (d?.success) {
+        return {
+          country: d.country,
+          countryCode: d.country_code,
+          regionName: d.region,
+          city: d.city,
+          zip: d.postal,
+          lat: typeof d.latitude === 'number' ? d.latitude : undefined,
+          lon: typeof d.longitude === 'number' ? d.longitude : undefined,
+          timezone: d.timezone?.id,
+          isp: d.connection?.isp,
+          org: d.connection?.org,
+          as: d.connection?.asn ? `AS${d.connection.asn}` : undefined,
+        };
+      }
+    }
+  } catch {
+    // ignore
+  }
+
+  return null;
 }
 
 export function telegramVisitLogger(req, res, next) {
