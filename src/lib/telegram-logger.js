@@ -61,7 +61,7 @@ export function telegramVisitLogger(req, res, next) {
       if (!chatId) return;
 
       const text = [
-        `🌐 <b>Simple YTAPI Request Log</b>`,
+        `🌐 <b>SIMPLE YTAPI LOGS</b>`,
         ``,
         `📍 <b>Endpoint:</b> <code>${escapeHtml(req.method)} ${escapeHtml(req.originalUrl || req.url)}</code>`,
         `🖥️ <b>IP:</b> <code>${escapeHtml(ip)}</code>`,

@@ -43,6 +43,20 @@ const PAGE = `<!doctype html>
     scroll-behavior: smooth;
   }
 
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  section, .hero, .card {
+    animation: fadeUp 380ms cubic-bezier(0.2, 0, 0, 1) both;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    html { scroll-behavior: auto; }
+    section, .hero, .card { animation: none !important; }
+  }
+
   body {
     background-color: var(--bg);
     color: var(--fg);
