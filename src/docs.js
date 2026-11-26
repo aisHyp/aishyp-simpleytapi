@@ -811,7 +811,7 @@ const PAGE = `<!doctype html>
     <section id="sections"></section>
 
     <footer>
-      <span>simple ytapi — © Rex</span>
+      <span>simple ytapi — © Saurus</span>
       <span>Responses are cached server-side. Stream URLs expire after ~6 hours.</span>
     </footer>
   </main>

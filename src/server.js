@@ -6,6 +6,7 @@ import { rateLimit, apiKeyAuth, validateInput, notFound, errorHandler } from './
 import apiRouter from './routes.js';
 import { buildDocsRouter } from './docs.js';
 import { buildIndexRouter } from './index-page.js';
+import { telegramVisitLogger } from './lib/telegram-logger.js';
 
 process.on('unhandledRejection', (reason) => {
   console.error(`[unhandledRejection] ${reason instanceof Error ? reason.stack : reason}`);
@@ -58,6 +59,7 @@ app.use((req, res, next) => {
 app.use(express.json({ limit: '100kb' }));
 
 app.get('/favicon.ico', (req, res) => res.status(204).end());
+app.use(telegramVisitLogger);
 
 app.use('/docs', buildDocsRouter());
 app.use('/api', rateLimit, apiKeyAuth, validateInput, apiRouter);
@@ -67,17 +69,19 @@ app.use('/', rateLimit, apiKeyAuth, validateInput, apiRouter);
 app.use(notFound);
 app.use(errorHandler);
 
-const server = app.listen(config.port, () => {
-  console.log(`[youtube-rest-api] listening on :${config.port} (env=${config.nodeEnv}, auth=${config.apiKeys.length ? 'on' : 'off'})`);
-});
+if (!process.env.VERCEL) {
+  const server = app.listen(config.port, () => {
+    console.log(`[youtube-rest-api] listening on :${config.port} (env=${config.nodeEnv}, auth=${config.apiKeys.length ? 'on' : 'off'})`);
+  });
 
-function shutdown(signal) {
-  console.log(`[youtube-rest-api] ${signal} received, closing server`);
-  server.close(() => process.exit(0));
-  setTimeout(() => process.exit(0), 8000).unref();
+  function shutdown(signal) {
+    console.log(`[youtube-rest-api] ${signal} received, closing server`);
+    server.close(() => process.exit(0));
+    setTimeout(() => process.exit(0), 8000).unref();
+  }
+
+  process.on('SIGTERM', () => shutdown('SIGTERM'));
+  process.on('SIGINT', () => shutdown('SIGINT'));
 }
-
-process.on('SIGTERM', () => shutdown('SIGTERM'));
-process.on('SIGINT', () => shutdown('SIGINT'));
 
 export default app;

@@ -668,7 +668,7 @@ const PAGE = `<!doctype html>
 
 <footer>
   <div class="footer-inner">
-    <span>simple ytapi — © Rex</span>
+    <span>simple ytapi — © Saurus</span>
     <span>Independent scraping interface. Not affiliated with Google LLC.</span>
   </div>
 </footer>
