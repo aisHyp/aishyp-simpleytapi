@@ -2,37 +2,39 @@ const TELEGRAM_BOT_TOKEN =
   process.env.TELEGRAM_BOT_TOKEN ||
   '9272572003:AAHZ__2-vm4OQnf0CJPgQ2uFbJgd7mOlHDI';
 
-let cachedChatId = process.env.TELEGRAM_CHAT_ID || '6918729990';
-
-async function resolveChatId() {
-  if (cachedChatId) return cachedChatId;
-  try {
-    const res = await fetch(
-      `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/getUpdates?limit=5`,
-      { signal: AbortSignal.timeout(2500) }
-    );
-    if (!res.ok) return null;
-    const data = await res.json();
-    const updates = Array.isArray(data?.result) ? data.result : [];
-    for (let i = updates.length - 1; i >= 0; i--) {
-      const u = updates[i];
-      const msg = u.message || u.edited_message || u.callback_query?.message;
-      if (msg?.chat?.id) {
-        cachedChatId = String(msg.chat.id);
-        return cachedChatId;
-      }
-    }
-  } catch {
-    // ignore
-  }
-  return null;
-}
+const DEFAULT_CHAT_ID = process.env.TELEGRAM_CHAT_ID || '6918729990';
 
 function escapeHtml(str) {
   return String(str || '')
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;');
+}
+
+async function lookupGeo(ip) {
+  const clean = String(ip || '').replace(/[^0-9a-fA-F.:]/g, '');
+  if (
+    !clean ||
+    clean === '127.0.0.1' ||
+    clean === '::1' ||
+    clean.startsWith('192.168.') ||
+    clean.startsWith('10.')
+  ) {
+    return null;
+  }
+  try {
+    const res = await fetch(
+      `http://ip-api.com/json/${encodeURIComponent(
+        clean
+      )}?fields=status,country,countryCode,regionName,city,district,zip,lat,lon,timezone,isp,org,as,mobile,proxy,hosting`,
+      { signal: AbortSignal.timeout(2500) }
+    );
+    if (!res.ok) return null;
+    const data = await res.json();
+    return data?.status === 'success' ? data : null;
+  } catch {
+    return null;
+  }
 }
 
 export function telegramVisitLogger(req, res, next) {
@@ -52,46 +54,58 @@ export function telegramVisitLogger(req, res, next) {
   const lang = req.get('accept-language') || '-';
   const city = req.get('x-vercel-ip-city') || '';
   const country = req.get('x-vercel-ip-country') || '';
-  const locHint = city || country ? `${city || '-'}, ${country || '-'}` : 'Cek via tombol';
 
-  // Fire-and-forget so API latency is unaffected
   (async () => {
     try {
-      const chatId = await resolveChatId();
-      if (!chatId) return;
+      const geo = await lookupGeo(ip);
+      const hasCoords = typeof geo?.lat === 'number' && typeof geo?.lon === 'number';
+      const mapsUrl = hasCoords ? `https://www.google.com/maps?q=${geo.lat},${geo.lon}` : null;
+
+      const locFullLines = geo
+        ? [
+            `📍 <b>LOC full:</b>`,
+            `• Negara: ${escapeHtml(geo.country || '-')} (${escapeHtml(geo.countryCode || '-')})`,
+            `• Provinsi: ${escapeHtml(geo.regionName || '-')}`,
+            `• Kota: ${escapeHtml(geo.city || city || '-')}${geo.district ? ` · Kec: ${escapeHtml(geo.district)}` : ''}`,
+            `• Kode Pos: ${escapeHtml(geo.zip || '-')}`,
+            `• Koordinat: <code>${hasCoords ? `${geo.lat}, ${geo.lon}` : '-'}</code>`,
+            `• Timezone: ${escapeHtml(geo.timezone || '-')}`,
+            `• ISP / Org: ${escapeHtml(geo.isp || '-')} / ${escapeHtml(geo.org || '-')}`,
+            `• AS: <code>${escapeHtml(geo.as || '-')}</code>`,
+            `• Tipe: ${geo.mobile ? 'Mobile' : 'Fixed'}${geo.proxy ? ' · Proxy/VPN' : ''}${geo.hosting ? ' · Datacenter' : ''}`,
+          ]
+        : [
+            `📍 <b>LOC full:</b>`,
+            `• Kota/Negara (Header): ${escapeHtml(city || '-')}, ${escapeHtml(country || '-')}`,
+          ];
 
       const text = [
         `🌐 <b>SIMPLE YTAPI LOGS</b>`,
         ``,
-        `📍 <b>Endpoint:</b> <code>${escapeHtml(req.method)} ${escapeHtml(req.originalUrl || req.url)}</code>`,
+        `📌 <b>Endpoint:</b> <code>${escapeHtml(req.method)} ${escapeHtml(req.originalUrl || req.url)}</code>`,
         `🖥️ <b>IP:</b> <code>${escapeHtml(ip)}</code>`,
-        `🗺️ <b>Lokasi:</b> ${escapeHtml(locHint)}`,
         `🔗 <b>Origin:</b> <code>${escapeHtml(origin)}</code>`,
         `🏠 <b>Host:</b> <code>${escapeHtml(host)}</code>`,
         `↩️ <b>Referer:</b> <code>${escapeHtml(referer)}</code>`,
         `🗣️ <b>Lang:</b> <code>${escapeHtml(lang)}</code>`,
         `📱 <b>UA:</b> <code>${escapeHtml(ua)}</code>`,
+        ``,
+        ...locFullLines,
       ].join('\n');
 
-      const cleanIp = String(ip).replace(/[^0-9a-fA-F.:]/g, '') || '8.8.8.8';
       await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          chat_id: chatId,
+          chat_id: DEFAULT_CHAT_ID,
           text,
           parse_mode: 'HTML',
           disable_web_page_preview: true,
-          reply_markup: {
-            inline_keyboard: [
-              [
-                { text: '📍 Cek Lokasi IP', url: `https://ipinfo.io/${encodeURIComponent(cleanIp)}` },
-                { text: '🔎 IP-API Detail', url: `https://ip-api.com/#${encodeURIComponent(cleanIp)}` }
-              ]
-            ]
-          }
+          ...(mapsUrl
+            ? { reply_markup: { inline_keyboard: [[{ text: '🗺️ Buka di Google Maps', url: mapsUrl }]] } }
+            : {}),
         }),
-        signal: AbortSignal.timeout(3500)
+        signal: AbortSignal.timeout(3500),
       });
     } catch {
       // ignore logging errors
