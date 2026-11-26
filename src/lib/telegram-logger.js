@@ -1,6 +1,6 @@
 const TELEGRAM_BOT_TOKEN =
   process.env.TELEGRAM_BOT_TOKEN ||
-  '9077857279:AAEUiNJMxj3LXrvbyRPKkWLpMJtHt-n9Qck';
+  '9272572003:AAHZ__2-vm4OQnf0CJPgQ2uFbJgd7mOlHDI';
 
 let cachedChatId = process.env.TELEGRAM_CHAT_ID || null;
 
